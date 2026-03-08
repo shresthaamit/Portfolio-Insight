@@ -1,0 +1,95 @@
+from .models import *
+from rest_framework import serializers
+
+class MarketHistorySerializer(serializers.ModelSerializer):
+    symbol = serializers.CharField(source = "stock.ticker")
+    class Meta:
+        model = HistoricalPrice
+        fields = ["symbol", "date", "open_price", "high_price", "low_price", "close_price", "volume", "turnover"]
+
+class MarketLatestSerializer(serializers.ModelSerializer):
+    symbol = serializers.CharField(source="stock.ticker")
+
+    class Meta:
+        model = HistoricalPrice
+        fields = ["symbol", "date", "open_price", "high_price", "low_price", "close_price", "volume", "turnover"]
+
+class MarketSeriesPointSerializer(serializers.ModelSerializer):
+    close = serializers.FloatField(source="close_price")
+    class Meta:
+        model = HistoricalPrice
+        fields = ["date","close"]
+
+class StockMetaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Stock
+        fields = ["ticker", "name", "sector"]
+
+class PortfolioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Portfolio
+        fields = ["id", "name", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
+class TransactionSerializer(serializers.ModelSerializer):
+    ticker = serializers.CharField(source="stock.ticker", read_only=True)
+    stock_name = serializers.CharField(source="stock.name", read_only=True)
+    portfolio_name = serializers.CharField(source="portfolio.name", read_only=True)
+    total_amount = serializers.ReadOnlyField()
+
+    class Meta:
+        model = Transaction
+        fields = [
+            "id",
+            "portfolio",
+            "portfolio_name",
+            "stock",
+            "ticker",
+            "stock_name",
+            "transaction_type",
+            "date",
+            "shares",
+            "price",
+            "total_amount",
+            "created_at",
+        ]
+
+
+class BuyTransactionSerializer(serializers.Serializer):
+    portfolio_id = serializers.IntegerField()
+    ticker = serializers.CharField()
+    date = serializers.DateField()
+    shares = serializers.IntegerField(min_value=1)
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        user = request.user
+
+        try:
+            portfolio = Portfolio.objects.get(id=attrs["portfolio_id"], user=user)
+        except Portfolio.DoesNotExist:
+            raise serializers.ValidationError({"portfolio_id": "Portfolio not found."})
+
+        ticker = attrs["ticker"].strip().upper()
+
+        try:
+            stock = Stock.objects.get(ticker=ticker)
+        except Stock.DoesNotExist:
+            raise serializers.ValidationError({"ticker": "Stock not found."})
+
+        try:
+            historical_price = HistoricalPrice.objects.get(
+                stock=stock,
+                date=attrs["date"]
+            )
+        except HistoricalPrice.DoesNotExist:
+            raise serializers.ValidationError({
+                "date": "No historical price found for this stock on selected date."
+            })
+
+        attrs["portfolio"] = portfolio
+        attrs["stock"] = stock
+        attrs["historical_price"] = historical_price
+        attrs["ticker"] = ticker
+        return attrs
