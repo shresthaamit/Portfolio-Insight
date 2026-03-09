@@ -14,7 +14,12 @@ urlpatterns = [
 
     path("stock-price/", StockPriceView.as_view(), name="stock-price"),
     path("transactions/buy/", BuyTransactionView.as_view(), name="buy-transaction"),
+    path(
+    "transactions/sell/",SellTransactionView.as_view(),
+    name="sell-transaction"
+),
     path("transactions/", TransactionListView.as_view(), name="transaction-list"),
+    path("holdings/", HoldingListView.as_view(), name="holding-list"),
 
 
 

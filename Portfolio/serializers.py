@@ -93,3 +93,71 @@ class BuyTransactionSerializer(serializers.Serializer):
         attrs["historical_price"] = historical_price
         attrs["ticker"] = ticker
         return attrs
+
+
+class SellTransactionSerializer(serializers.Serializer):
+    portfolio_id = serializers.IntegerField()
+    ticker = serializers.CharField()
+    date = serializers.DateField()
+    shares = serializers.IntegerField(min_value=1)
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        user = request.user
+
+        try:
+            portfolio = Portfolio.objects.get(id=attrs["portfolio_id"], user=user)
+        except Portfolio.DoesNotExist:
+            raise serializers.ValidationError("Portfolio not found")
+
+        ticker = attrs["ticker"].strip().upper()
+
+        try:
+            stock = Stock.objects.get(ticker=ticker)
+        except Stock.DoesNotExist:
+            raise serializers.ValidationError("Stock not found")
+
+        try:
+            holding = Holding.objects.get(portfolio=portfolio, stock=stock)
+        except Holding.DoesNotExist:
+            raise serializers.ValidationError("No holdings for this stock")
+
+        if attrs["shares"] > holding.shares:
+            raise serializers.ValidationError("Not enough shares to sell")
+
+        try:
+            price = HistoricalPrice.objects.get(
+                stock=stock,
+                date=attrs["date"]
+            )
+        except HistoricalPrice.DoesNotExist:
+            raise serializers.ValidationError("No historical price for this date")
+
+        attrs["portfolio"] = portfolio
+        attrs["stock"] = stock
+        attrs["holding"] = holding
+        attrs["price"] = price.close_price
+
+        return attrs
+    
+
+class HoldingSerializer(serializers.ModelSerializer):
+    ticker = serializers.CharField(source="stock.ticker", read_only=True)
+    stock_name = serializers.CharField(source="stock.name", read_only=True)
+    average_price = serializers.FloatField(source="purchase_price", read_only=True)
+    total_investment = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Holding
+        fields = [
+            "id",
+            "ticker",
+            "stock_name",
+            "shares",
+            "average_price",
+            "purchase_date",
+            "total_investment",
+        ]
+
+    def get_total_investment(self, obj):
+        return round(obj.shares * obj.purchase_price, 2)

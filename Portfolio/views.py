@@ -12,7 +12,9 @@ from django.http import HttpResponse, JsonResponse
 from .models import HistoricalPrice,Stock,Portfolio,Transaction, Holding
 from .serializers import (MarketHistorySerializer,MarketLatestSerializer,
                           MarketSeriesPointSerializer, StockMetaSerializer,
-                          PortfolioSerializer,TransactionSerializer, BuyTransactionSerializer)
+                          PortfolioSerializer,TransactionSerializer, BuyTransactionSerializer, SellTransactionSerializer,HoldingSerializer
+                          
+                          )
 from .services import load_market_full
 def LoadMarketDataView(request):
     result = load_market_full('./Portfolio/data/Portfolio_data.xlsx')
@@ -246,6 +248,39 @@ class BuyTransactionView(APIView):
             },
             status=status.HTTP_201_CREATED
         )
+    
+
+
+class SellTransactionView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        serializer = SellTransactionSerializer(data=request.data, context={"request":request})
+        serializer.is_valid(raise_exception=True)
+        portfolio = serializer.validated_data["portfolio"]
+        stock = serializer.validated_data["stock"]
+        shares = serializer.validated_data["shares"]
+        date = serializer.validated_data["date"]
+        price = serializer.validated_data["price"]
+        holding = serializer.validated_data["holding"]
+        transaction = Transaction.objects.create(
+            portfolio=portfolio,
+            stock = stock,
+            transaction_type="SELL",
+            date=date,
+            shares=shares,
+            price=price
+        )
+        holding.shares -= shares
+        if holding.shares == 0:
+            holding.delete()
+
+        else:
+            holding.save()
+
+        return Response({
+            "message": "SELL transaction successful",
+            "transaction": TransactionSerializer(transaction).data
+        }, status=201)           
 class TransactionListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -268,6 +303,34 @@ class TransactionListView(APIView):
 
         return Response( {"transactions": serializer.data,
             "total": total_investment})
+    
+
+class HoldingListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        portfolio_id = request.query_params.get("portfolio_id")
+
+        if not portfolio_id:
+            return Response(
+                {"error": "portfolio_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            portfolio = Portfolio.objects.get(id=portfolio_id, user=request.user)
+        except Portfolio.DoesNotExist:
+            return Response(
+                {"error": "Portfolio not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        qs = Holding.objects.filter(
+            portfolio=portfolio
+        ).select_related("stock").order_by("stock__ticker")
+
+        return Response(HoldingSerializer(qs, many=True).data)
+
 def sample_view(request):
     data = []
     sample = HistoricalPrice.objects.order_by('?')[:10]
@@ -281,3 +344,5 @@ def sample_view(request):
         })
 
     return JsonResponse(data, safe=False)
+
+
