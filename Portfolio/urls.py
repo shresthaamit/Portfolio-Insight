@@ -20,6 +20,7 @@ urlpatterns = [
 ),
     path("transactions/", TransactionListView.as_view(), name="transaction-list"),
     path("holdings/", HoldingListView.as_view(), name="holding-list"),
+    path("portfolio-summary/", PortfolioSummaryView.as_view(), name="portfolio-summary"),
 
 
 

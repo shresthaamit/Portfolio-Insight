@@ -253,6 +253,7 @@ class BuyTransactionView(APIView):
 
 class SellTransactionView(APIView):
     permission_classes = [IsAuthenticated]
+    @db_transaction.atomic
     def post(self, request):
         serializer = SellTransactionSerializer(data=request.data, context={"request":request})
         serializer.is_valid(raise_exception=True)
@@ -272,14 +273,27 @@ class SellTransactionView(APIView):
         )
         holding.shares -= shares
         if holding.shares == 0:
+            ticker = holding.stock.ticker
+            avg_price = holding.purchase_price
             holding.delete()
-
+            holding_data = {
+                            "ticker": ticker,
+                            "remaining_shares": 0,
+                            "average_price": round(avg_price, 2)
+                        }
         else:
             holding.save()
+            holding_data = {
+                "ticker": holding.stock.ticker,
+                "remaining_shares": holding.shares,
+                "average_price": round(holding.purchase_price, 2)
+            }
 
         return Response({
             "message": "SELL transaction successful",
-            "transaction": TransactionSerializer(transaction).data
+            "transaction": TransactionSerializer(transaction).data,
+                "holding": holding_data
+
         }, status=201)           
 class TransactionListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -331,6 +345,68 @@ class HoldingListView(APIView):
 
         return Response(HoldingSerializer(qs, many=True).data)
 
+class PortfolioSummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        portfolio_id = request.query_params.get("portfolio_id")
+        if not portfolio_id:
+            return Response(
+                {"error":"Portfolio_id is required"},
+                status = status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            portfolio = Portfolio.objects.get(id=portfolio_id,user=request.user)
+        except Portfolio.DoesNotExist:
+            return Response(
+                {"error": "Portfolio not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        holdings = Holding.objects.filter(
+            portfolio=portfolio
+        ).select_related("stock")
+        total_investment = 0
+        current_value = 0
+        holdings_data = []
+        for holding in holdings:
+            investment = round(holding.shares * holding.purchase_price, 2)
+
+            latest_price_obj = (
+                HistoricalPrice.objects
+                .filter(stock=holding.stock)
+                .order_by("-date")
+                .first()
+            )
+
+            latest_price = latest_price_obj.close_price if latest_price_obj else 0
+            value = round(holding.shares * latest_price, 2)
+            profit_loss = round(value - investment, 2)
+
+            total_investment += investment
+            current_value += value
+
+            holdings_data.append({
+                "ticker": holding.stock.ticker,
+                "stock_name": holding.stock.name,
+                "shares": holding.shares,
+                "average_price": round(holding.purchase_price, 2),
+                "latest_price": latest_price,
+                "investment": investment,
+                "current_value": value,
+                "profit_loss": profit_loss,
+            })
+
+        total_investment = round(total_investment, 2)
+        current_value = round(current_value, 2)
+        profit_loss = round(current_value - total_investment, 2)
+
+        return Response({
+            "portfolio_id": portfolio.id,
+            "portfolio_name": portfolio.name,
+            "total_investment": total_investment,
+            "current_value": current_value,
+            "profit_loss": profit_loss,
+            "holdings": holdings_data
+        })
 def sample_view(request):
     data = []
     sample = HistoricalPrice.objects.order_by('?')[:10]

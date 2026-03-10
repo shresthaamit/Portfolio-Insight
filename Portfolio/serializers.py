@@ -144,7 +144,7 @@ class SellTransactionSerializer(serializers.Serializer):
 class HoldingSerializer(serializers.ModelSerializer):
     ticker = serializers.CharField(source="stock.ticker", read_only=True)
     stock_name = serializers.CharField(source="stock.name", read_only=True)
-    average_price = serializers.FloatField(source="purchase_price", read_only=True)
+    average_price = serializers.SerializerMethodField()
     total_investment = serializers.SerializerMethodField()
 
     class Meta:
@@ -158,6 +158,9 @@ class HoldingSerializer(serializers.ModelSerializer):
             "purchase_date",
             "total_investment",
         ]
+
+    def get_average_price(self, obj):
+        return round(obj.purchase_price, 2)
 
     def get_total_investment(self, obj):
         return round(obj.shares * obj.purchase_price, 2)
