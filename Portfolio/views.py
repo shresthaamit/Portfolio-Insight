@@ -9,13 +9,15 @@ from django.utils.dateparse import parse_date
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated,AllowAny
 from django.http import HttpResponse, JsonResponse
+from .sector_analysis_service import get_sector_allocation
 from .models import HistoricalPrice,Stock,Portfolio,Transaction, Holding
 from .serializers import (MarketHistorySerializer,MarketLatestSerializer,
                           MarketSeriesPointSerializer, StockMetaSerializer,
                           PortfolioSerializer,TransactionSerializer, BuyTransactionSerializer, SellTransactionSerializer,HoldingSerializer
-                          
+                          , SectorAllocationItemSerializer,SectorAllocationSerializer
                           )
 from .services import load_market_full
+
 def LoadMarketDataView(request):
     result = load_market_full('./Portfolio/data/Portfolio_data.xlsx')
     return JsonResponse(result)
@@ -407,6 +409,27 @@ class PortfolioSummaryView(APIView):
             "profit_loss": profit_loss,
             "holdings": holdings_data
         })
+    
+
+class SectorAllocationAPIView(APIView):
+    permission_Classes = [IsAuthenticated]
+    def get(self, request, portfolio_id):
+        try:
+            result = get_sector_allocation(portfolio_id=portfolio_id,user= request.user)
+            serializer = SectorAllocationSerializer(instance = result)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response(
+                {"detail":str(e)},status= status.HTTP_400_NOT_FOUND
+            )
+        except PermissionError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+
+        
 def sample_view(request):
     data = []
     sample = HistoricalPrice.objects.order_by('?')[:10]

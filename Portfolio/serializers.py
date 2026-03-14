@@ -164,3 +164,16 @@ class HoldingSerializer(serializers.ModelSerializer):
 
     def get_total_investment(self, obj):
         return round(obj.shares * obj.purchase_price, 2)
+    
+
+class SectorAllocationItemSerializer(serializers.Serializer):
+    sector = serializers.CharField()
+    invested_value =serializers.FloatField()
+    allocation_percent = serializers.FloatField()
+    holding_count = serializers.IntegerField()
+
+class SectorAllocationSerializer(serializers.Serializer):
+    portfolio_id = serializers.IntegerField()
+    portfolio_name = serializers.CharField()
+    total_invested = serializers.FloatField()
+    sectors = SectorAllocationItemSerializer(many=True)
