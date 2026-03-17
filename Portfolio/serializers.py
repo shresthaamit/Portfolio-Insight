@@ -177,3 +177,13 @@ class SectorAllocationSerializer(serializers.Serializer):
     portfolio_name = serializers.CharField()
     total_invested = serializers.FloatField()
     sectors = SectorAllocationItemSerializer(many=True)
+
+class PortfolioTrendPointSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    value = serializers.FloatField()
+
+
+class PortfolioTrendSerializer(serializers.Serializer):
+    portfolio_id = serializers.IntegerField()
+    portfolio_name = serializers.CharField()
+    trend = PortfolioTrendPointSerializer(many=True)

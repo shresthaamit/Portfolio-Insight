@@ -14,8 +14,10 @@ from .models import HistoricalPrice,Stock,Portfolio,Transaction, Holding
 from .serializers import (MarketHistorySerializer,MarketLatestSerializer,
                           MarketSeriesPointSerializer, StockMetaSerializer,
                           PortfolioSerializer,TransactionSerializer, BuyTransactionSerializer, SellTransactionSerializer,HoldingSerializer
-                          , SectorAllocationItemSerializer,SectorAllocationSerializer
+                          , SectorAllocationItemSerializer,SectorAllocationSerializer,PortfolioTrendSerializer,PortfolioTrendPointSerializer
                           )
+from .portfolio_trend_service import get_portfolio_trend
+
 from .services import load_market_full
 
 def LoadMarketDataView(request):
@@ -428,6 +430,31 @@ class SectorAllocationAPIView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         
+class PortfolioTrendAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, portfolio_id):
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+
+        try:
+            data = get_portfolio_trend(
+                portfolio_id=portfolio_id,
+                user=request.user,
+                start_date=start_date,
+                end_date=end_date
+            )
+            serializer = PortfolioTrendSerializer(instance=data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_404_NOT_FOUND)
+
+        except PermissionError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         
 def sample_view(request):

@@ -26,6 +26,8 @@ urlpatterns = [
         SectorAllocationAPIView.as_view(),
         name="sector-allocation",
     ),
+        path("analytics/portfolio-trend/<int:portfolio_id>/", PortfolioTrendAPIView.as_view(), name="portfolio-trend"),
+
 
 
 
