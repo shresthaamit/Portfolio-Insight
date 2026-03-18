@@ -186,4 +186,9 @@ class PortfolioTrendPointSerializer(serializers.Serializer):
 class PortfolioTrendSerializer(serializers.Serializer):
     portfolio_id = serializers.IntegerField()
     portfolio_name = serializers.CharField()
+    start_date = serializers.DateField(allow_null=True)
+    end_date = serializers.DateField(allow_null=True)
+    start_value = serializers.FloatField()
+    end_value = serializers.FloatField()
+    return_percent = serializers.FloatField()
     trend = PortfolioTrendPointSerializer(many=True)
