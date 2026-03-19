@@ -192,3 +192,25 @@ class PortfolioTrendSerializer(serializers.Serializer):
     end_value = serializers.FloatField()
     return_percent = serializers.FloatField()
     trend = PortfolioTrendPointSerializer(many=True)
+
+class PortfolioValueSerializer(serializers.Serializer):
+    portfolio_id = serializers.IntegerField()
+    portfolio_name = serializers.CharField()
+    date = serializers.DateField()
+    value = serializers.FloatField()
+
+
+
+class PortfolioHoldingItemSerializer(serializers.Serializer):
+    ticker = serializers.CharField()
+    name = serializers.CharField(allow_null=True, allow_blank=True)
+    shares = serializers.IntegerField()
+    price = serializers.FloatField()
+    value = serializers.FloatField()
+
+class PortfolioHoldingsSerializer(serializers.Serializer):
+    portfolio_id = serializers.IntegerField()
+    portfolio_name = serializers.CharField()
+    date = serializers.DateField()
+    total_value = serializers.FloatField()
+    holdings = PortfolioHoldingItemSerializer(many=True)

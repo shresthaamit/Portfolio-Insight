@@ -14,9 +14,10 @@ from .models import HistoricalPrice,Stock,Portfolio,Transaction, Holding
 from .serializers import (MarketHistorySerializer,MarketLatestSerializer,
                           MarketSeriesPointSerializer, StockMetaSerializer,
                           PortfolioSerializer,TransactionSerializer, BuyTransactionSerializer, SellTransactionSerializer,HoldingSerializer
-                          , SectorAllocationItemSerializer,SectorAllocationSerializer,PortfolioTrendSerializer,PortfolioTrendPointSerializer
+                          , SectorAllocationItemSerializer,SectorAllocationSerializer,PortfolioTrendSerializer,PortfolioTrendPointSerializer, PortfolioValueSerializer
+                          ,PortfolioHoldingsSerializer
                           )
-from .portfolio_trend_service import get_portfolio_trend
+from .portfolio_trend_service import get_portfolio_trend, get_portfolio_value_on_date,get_portfolio_holdings_on_date
 
 from .services import load_market_full
 
@@ -456,7 +457,46 @@ class PortfolioTrendAPIView(APIView):
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        
+
+
+class PortfolioValueAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, portfolio_id):
+        date = request.query_params.get("date")
+
+        try:
+            data = get_portfolio_value_on_date(
+                portfolio_id=portfolio_id,
+                date=date,
+                user=request.user
+            )
+            serializer = PortfolioValueSerializer(instance=data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        except PermissionError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+
+class PortfolioHoldingAPIView(APIView):
+    permission_classes =[IsAuthenticated]
+    def get(self,request,portfolio_id):
+        date = request.query_params.get("date")
+        try:
+            data = get_portfolio_holdings_on_date(
+                portfolio_id=portfolio_id, date=date,user = request.user
+
+            )
+            serializer = PortfolioHoldingsSerializer(instance = data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except ValueError as e:
+            return Response({"detail":str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            return Response({'detail':str(e)}, status=status.HTTP_403_FORBIDDEN)
 def sample_view(request):
     data = []
     sample = HistoricalPrice.objects.order_by('?')[:10]

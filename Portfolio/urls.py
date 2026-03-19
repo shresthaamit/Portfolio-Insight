@@ -27,6 +27,17 @@ urlpatterns = [
         name="sector-allocation",
     ),
         path("analytics/portfolio-trend/<int:portfolio_id>/", PortfolioTrendAPIView.as_view(), name="portfolio-trend"),
+        path(
+        "analytics/portfolio-value/<int:portfolio_id>/",
+        PortfolioValueAPIView.as_view(),
+        name="portfolio-value"),
+        path(
+            "analytics/portfolio-holdings/<int:portfolio_id>/",
+            PortfolioHoldingAPIView.as_view(),
+            name="portfolio-holdings",
+),
+        
+
 
 
 
