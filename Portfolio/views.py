@@ -15,9 +15,10 @@ from .serializers import (MarketHistorySerializer,MarketLatestSerializer,
                           MarketSeriesPointSerializer, StockMetaSerializer,
                           PortfolioSerializer,TransactionSerializer, BuyTransactionSerializer, SellTransactionSerializer,HoldingSerializer
                           , SectorAllocationItemSerializer,SectorAllocationSerializer,PortfolioTrendSerializer,PortfolioTrendPointSerializer, PortfolioValueSerializer
-                          ,PortfolioHoldingsSerializer
+                          ,PortfolioHoldingsSerializer,TopHoldingsSerializer
                           )
-from .portfolio_trend_service import get_portfolio_trend, get_portfolio_value_on_date,get_portfolio_holdings_on_date
+from .portfolio_trend_service import get_portfolio_trend, get_portfolio_value_on_date,get_portfolio_holdings_on_date, get_top_holdings
+                                
 
 from .services import load_market_full
 
@@ -497,6 +498,24 @@ class PortfolioHoldingAPIView(APIView):
             return Response({"detail":str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except PermissionError as e:
             return Response({'detail':str(e)}, status=status.HTTP_403_FORBIDDEN)
+        
+
+class TopHoldingAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, portfolio_id):
+        date = request.query_params.get("date")
+        try:
+            data =  get_top_holdings(
+                portfolio_id=portfolio_id,
+                user = request.user,
+                date=date
+            )
+            serializer = TopHoldingsSerializer(instance=data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)          
+        
 def sample_view(request):
     data = []
     sample = HistoricalPrice.objects.order_by('?')[:10]
@@ -510,5 +529,6 @@ def sample_view(request):
         })
 
     return JsonResponse(data, safe=False)
+
 
 

@@ -214,3 +214,22 @@ class PortfolioHoldingsSerializer(serializers.Serializer):
     date = serializers.DateField()
     total_value = serializers.FloatField()
     holdings = PortfolioHoldingItemSerializer(many=True)
+
+
+class TopHoldingItemSerializer(serializers.Serializer):
+    ticker = serializers.CharField()
+    name = serializers.CharField()
+    shares = serializers.FloatField()
+    price = serializers.FloatField()
+    value = serializers.FloatField()
+    weight_percent = serializers.FloatField()
+
+
+class TopHoldingsSerializer(serializers.Serializer):
+    portfolio_id = serializers.IntegerField()
+    portfolio_name = serializers.CharField()
+    date = serializers.DateField()
+    total_value = serializers.FloatField()
+    top_holdings = TopHoldingItemSerializer(many=True)
+    top_1_weight = serializers.FloatField()
+    top_3_weight = serializers.FloatField()

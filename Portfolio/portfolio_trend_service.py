@@ -241,9 +241,10 @@ def get_portfolio_holdings_on_date(portfolio_id, date, user=None):
 
         price_obj = (
             HistoricalPrice.objects
-            .filter(stock_id=stock_id, date=target_date)
+            .filter(stock_id=stock_id, date__lte=target_date)
+            .order_by("-date")
             .first()
-        )
+)
 
         if not price_obj:
             continue
@@ -268,4 +269,48 @@ def get_portfolio_holdings_on_date(portfolio_id, date, user=None):
         "date": target_date,
         "total_value": round(total_value, 2),
         "holdings": holdings
+    }
+
+
+
+def get_top_holdings(portfolio_id, user=None, date=None):
+    data = get_portfolio_holdings_on_date(
+        portfolio_id=portfolio_id,
+        user=user,
+        date=date
+    )
+
+    holdings = data["holdings"]
+    total_value = data["total_value"]
+
+    if total_value == 0:
+        return {
+            "portfolio_id": data["portfolio_id"],
+            "portfolio_name": data["portfolio_name"],
+            "date": date,
+            "total_value": 0,
+            "top_holdings": [],
+            "top_1_weight": 0,
+            "top_3_weight": 0
+        }
+
+    # calculate weight %
+    for h in holdings:
+        h["weight_percent"] = round((h["value"] / total_value) * 100, 2)
+
+    # sort by value desc
+    holdings = sorted(holdings, key=lambda x: x["value"], reverse=True)
+
+    # top 1 and top 3
+    top_1_weight = holdings[0]["weight_percent"] if holdings else 0
+    top_3_weight = round(sum(h["weight_percent"] for h in holdings[:3]), 2)
+
+    return {
+        "portfolio_id": data["portfolio_id"],
+        "portfolio_name": data["portfolio_name"],
+        "date": date,
+        "total_value": total_value,
+        "top_holdings": holdings,
+        "top_1_weight": top_1_weight,
+        "top_3_weight": top_3_weight
     }
