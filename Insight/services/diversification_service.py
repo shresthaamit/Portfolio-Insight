@@ -1,6 +1,6 @@
-from Portfolio.models import Portfolio, Holding
+from Portfolio.models import Portfolio, Holding,HistoricalPrice
 
-
+from Insight.models import MarketBenchmark
 def get_diversification_score(portfolio_id, user=None):
     portfolio = Portfolio.objects.filter(id=portfolio_id).first()
 
@@ -69,4 +69,67 @@ def get_diversification_score(portfolio_id, user=None):
         "largest_stock_percentage": round(largest_stock_percentage, 2),
         "sector_concentration": sector_concentration,
         "recommendation": recommendation
+    }
+
+
+
+
+def get_portfolio_vs_benchmark(portfolio_id, user = None):
+    portfolio = Portfolio.objects.filter(id= portfolio_id).first()
+    if not portfolio:
+        raise ValueError("Portfolio not found.")
+    if user and portfolio.user != user:
+        raise PermissionError("You donot have permission.")
+    holdings  = Holding.objects.filter(portfolio=portfolio)
+    if not holdings.exists():
+        raise ValueError("No holding found in portfolio")
+    total_investment = 0
+    current_value = 0
+    for holding in holdings:
+        investment  = holding.shares * holding.purchase_price
+        latest_price_obj = (
+            HistoricalPrice.objects
+            .filter(stock = holding.stock)
+            .order_by("-date")
+            .first()
+
+        )
+        latest_price  =  latest_price_obj.close_price if latest_price_obj else 0
+        value = holding.shares * latest_price
+        total_investment += investment
+        current_value += value
+
+
+    if total_investment == 0:
+        raise ValueError("Total investment is zero")
+    
+    portfolio_return = (
+        (current_value - total_investment)/total_investment
+    ) * 100
+    first_benchmark = MarketBenchmark.objects.order_by("date").first()
+    latest_benchmark = MarketBenchmark.objects.order_by("-date").first()
+
+    if not first_benchmark or not latest_benchmark:
+        raise ValueError("Benchmark data not found")
+    benchmark_return = (
+        (latest_benchmark.value - first_benchmark.value)
+        / first_benchmark.value
+    ) * 100
+    alpha = portfolio_return - benchmark_return
+
+    if alpha >0:
+        status = "Outperforming"
+    elif alpha < 0:
+        status = "Underperforming"
+
+    else:
+        status = "Matching Benchmark"
+
+    return {
+        "portfolio_id": portfolio.id,
+        "portfolio_name": portfolio.name,
+        "portfolio_return": round(portfolio_return, 2),
+        "benchmark_return": round(benchmark_return, 2),
+        "alpha": round(alpha, 2),
+        "status": status
     }

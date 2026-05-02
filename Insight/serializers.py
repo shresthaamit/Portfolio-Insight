@@ -19,3 +19,10 @@ class DiversificationScoreSerializer(serializers.Serializer):
     sector_concentration = serializers.CharField()
     recommendation = serializers.CharField()
 
+class PortfolioBenchmarkComparisonSerializer(serializers.Serializer):
+    portfolio_id = serializers.IntegerField()
+    portfolio_name = serializers.CharField()
+    portfolio_return = serializers.FloatField()
+    benchmark_return = serializers.FloatField()
+    alpha = serializers.FloatField()
+    status = serializers.CharField()
