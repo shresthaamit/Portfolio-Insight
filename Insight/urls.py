@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import PortfolioRiskAPIView,DiversificationAPIView,BenchmarkGenerateAPIView,PortfolioBenchmarkComparisionAPIView
+from .views import PortfolioRiskAPIView,DiversificationAPIView,BenchmarkGenerateAPIView,PortfolioBenchmarkComparisionAPIView,SystemCheckAPIView
 
 urlpatterns = [
     path(
@@ -16,4 +16,5 @@ urlpatterns = [
     PortfolioBenchmarkComparisionAPIView.as_view(),
     name="portfolio-vs-benchmark"
 ),
+path("system-check/", SystemCheckAPIView.as_view())
 ]

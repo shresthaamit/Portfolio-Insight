@@ -4,11 +4,11 @@ from rest_framework.permissions import IsAuthenticated
 from .services.portfolio_risk_service import get_portfolio_risk_analysis
 from .services.diversification_service import get_diversification_score, get_portfolio_vs_benchmark
 from .serializers import PortfolioRiskSerializer,DiversificationScoreSerializer,PortfolioBenchmarkComparisonSerializer
-
+from Portfolio.models import Holding, Stock
 from rest_framework.permissions import AllowAny
 from .services.benchmark_service import generate_benchmark_from_excel
 from rest_framework.views import APIView
-
+from Insight.models import MarketBenchmark
 # Create your views here.
 
 
@@ -79,3 +79,14 @@ class PortfolioBenchmarkComparisionAPIView(APIView):
                  {"detail": str(e)},
                 status=403
             )
+        
+
+
+class SystemCheckAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        return Response({
+            "holdings": Holding.objects.count(),
+            "stocks": Stock.objects.count(),
+            "benchmarks": MarketBenchmark.objects.count()
+        })
