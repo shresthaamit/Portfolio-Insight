@@ -5,4 +5,4 @@ db.sqlite3
 db.sqlite3-shm
 db.sqlite3-wal
 .DS_Store
-.env
+.env.DS_Store
