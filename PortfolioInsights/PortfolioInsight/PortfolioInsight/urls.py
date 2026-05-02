@@ -26,5 +26,6 @@ urlpatterns = [
     path("accounts/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("accounts/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 
-    path('',include("Portfolio.urls"))
+    path('',include("Portfolio.urls")),
+    path("insights/", include("Insight.urls")),
 ]

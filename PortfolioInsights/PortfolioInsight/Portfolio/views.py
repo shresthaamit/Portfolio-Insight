@@ -9,11 +9,19 @@ from django.utils.dateparse import parse_date
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated,AllowAny
 from django.http import HttpResponse, JsonResponse
+from .sector_analysis_service import get_sector_allocation
 from .models import HistoricalPrice,Stock,Portfolio,Transaction, Holding
 from .serializers import (MarketHistorySerializer,MarketLatestSerializer,
                           MarketSeriesPointSerializer, StockMetaSerializer,
-                          PortfolioSerializer,TransactionSerializer, BuyTransactionSerializer)
+                          PortfolioSerializer,TransactionSerializer, BuyTransactionSerializer, SellTransactionSerializer,HoldingSerializer
+                          , SectorAllocationItemSerializer,SectorAllocationSerializer,PortfolioTrendSerializer,PortfolioTrendPointSerializer, PortfolioValueSerializer
+                          ,PortfolioHoldingsSerializer,TopHoldingsSerializer
+                          )
+from .portfolio_trend_service import get_portfolio_trend, get_portfolio_value_on_date,get_portfolio_holdings_on_date, get_top_holdings
+                                
+
 from .services import load_market_full
+
 def LoadMarketDataView(request):
     result = load_market_full('./Portfolio/data/Portfolio_data.xlsx')
     return JsonResponse(result)
@@ -246,6 +254,53 @@ class BuyTransactionView(APIView):
             },
             status=status.HTTP_201_CREATED
         )
+    
+
+
+class SellTransactionView(APIView):
+    permission_classes = [IsAuthenticated]
+    @db_transaction.atomic
+    def post(self, request):
+        serializer = SellTransactionSerializer(data=request.data, context={"request":request})
+        serializer.is_valid(raise_exception=True)
+        portfolio = serializer.validated_data["portfolio"]
+        stock = serializer.validated_data["stock"]
+        shares = serializer.validated_data["shares"]
+        date = serializer.validated_data["date"]
+        price = serializer.validated_data["price"]
+        holding = serializer.validated_data["holding"]
+        transaction = Transaction.objects.create(
+            portfolio=portfolio,
+            stock = stock,
+            transaction_type="SELL",
+            date=date,
+            shares=shares,
+            price=price
+        )
+        holding.shares -= shares
+        if holding.shares == 0:
+            ticker = holding.stock.ticker
+            avg_price = holding.purchase_price
+            holding.delete()
+            holding_data = {
+                            "ticker": ticker,
+                            "remaining_shares": 0,
+                            "average_price": round(avg_price, 2)
+                        }
+        else:
+            holding.save()
+            holding_data = {
+                "ticker": holding.stock.ticker,
+                "remaining_shares": holding.shares,
+                "average_price": round(holding.purchase_price, 2)
+            }
+
+        return Response({
+            "message": "SELL transaction successful",
+            "transaction": TransactionSerializer(transaction).data,
+                "holding": holding_data
+
+        }, status=201)           
 class TransactionListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -268,6 +323,199 @@ class TransactionListView(APIView):
 
         return Response( {"transactions": serializer.data,
             "total": total_investment})
+    
+
+class HoldingListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        portfolio_id = request.query_params.get("portfolio_id")
+
+        if not portfolio_id:
+            return Response(
+                {"error": "portfolio_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            portfolio = Portfolio.objects.get(id=portfolio_id, user=request.user)
+        except Portfolio.DoesNotExist:
+            return Response(
+                {"error": "Portfolio not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        qs = Holding.objects.filter(
+            portfolio=portfolio
+        ).select_related("stock").order_by("stock__ticker")
+
+        return Response(HoldingSerializer(qs, many=True).data)
+
+class PortfolioSummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request):
+        portfolio_id = request.query_params.get("portfolio_id")
+        if not portfolio_id:
+            return Response(
+                {"error":"Portfolio_id is required"},
+                status = status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            portfolio = Portfolio.objects.get(id=portfolio_id,user=request.user)
+        except Portfolio.DoesNotExist:
+            return Response(
+                {"error": "Portfolio not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        holdings = Holding.objects.filter(
+            portfolio=portfolio
+        ).select_related("stock")
+        total_investment = 0
+        current_value = 0
+        holdings_data = []
+        for holding in holdings:
+            investment = round(holding.shares * holding.purchase_price, 2)
+
+            latest_price_obj = (
+                HistoricalPrice.objects
+                .filter(stock=holding.stock)
+                .order_by("-date")
+                .first()
+            )
+
+            latest_price = latest_price_obj.close_price if latest_price_obj else 0
+            value = round(holding.shares * latest_price, 2)
+            profit_loss = round(value - investment, 2)
+
+            total_investment += investment
+            current_value += value
+
+            holdings_data.append({
+                "ticker": holding.stock.ticker,
+                "stock_name": holding.stock.name,
+                "shares": holding.shares,
+                "average_price": round(holding.purchase_price, 2),
+                "latest_price": latest_price,
+                "investment": investment,
+                "current_value": value,
+                "profit_loss": profit_loss,
+            })
+
+        total_investment = round(total_investment, 2)
+        current_value = round(current_value, 2)
+        profit_loss = round(current_value - total_investment, 2)
+
+        return Response({
+            "portfolio_id": portfolio.id,
+            "portfolio_name": portfolio.name,
+            "total_investment": total_investment,
+            "current_value": current_value,
+            "profit_loss": profit_loss,
+            "holdings": holdings_data
+        })
+    
+
+class SectorAllocationAPIView(APIView):
+    permission_Classes = [IsAuthenticated]
+    def get(self, request, portfolio_id):
+        try:
+            result = get_sector_allocation(portfolio_id=portfolio_id,user= request.user)
+            serializer = SectorAllocationSerializer(instance = result)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response(
+                {"detail":str(e)},status= status.HTTP_400_NOT_FOUND
+            )
+        except PermissionError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+class PortfolioTrendAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, portfolio_id):
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+
+        try:
+            data = get_portfolio_trend(
+                portfolio_id=portfolio_id,
+                user=request.user,
+                start_date=start_date,
+                end_date=end_date
+            )
+            serializer = PortfolioTrendSerializer(instance=data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_404_NOT_FOUND)
+
+        except PermissionError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class PortfolioValueAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, portfolio_id):
+        date = request.query_params.get("date")
+
+        try:
+            data = get_portfolio_value_on_date(
+                portfolio_id=portfolio_id,
+                date=date,
+                user=request.user
+            )
+            serializer = PortfolioValueSerializer(instance=data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        except PermissionError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+
+class PortfolioHoldingAPIView(APIView):
+    permission_classes =[IsAuthenticated]
+    def get(self,request,portfolio_id):
+        date = request.query_params.get("date")
+        try:
+            data = get_portfolio_holdings_on_date(
+                portfolio_id=portfolio_id, date=date,user = request.user
+
+            )
+            serializer = PortfolioHoldingsSerializer(instance = data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except ValueError as e:
+            return Response({"detail":str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            return Response({'detail':str(e)}, status=status.HTTP_403_FORBIDDEN)
+        
+
+class TopHoldingAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, portfolio_id):
+        date = request.query_params.get("date")
+        try:
+            data =  get_top_holdings(
+                portfolio_id=portfolio_id,
+                user = request.user,
+                date=date
+            )
+            serializer = TopHoldingsSerializer(instance=data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)          
+        
 def sample_view(request):
     data = []
     sample = HistoricalPrice.objects.order_by('?')[:10]
@@ -281,3 +529,6 @@ def sample_view(request):
         })
 
     return JsonResponse(data, safe=False)
+
+
+
